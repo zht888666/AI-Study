@@ -75,7 +75,7 @@ if __name__ == '__main__':
     color_image_np = cv2.bitwise_and(correct_image, correct_image, mask=mask)
     # color_image_np2 = cv2.cvtColor(image_np_gray, cv2.COLOR_GRAY2BGR)
     # color_image_np3 = cv2.add(image_np_gray, color_image_np2)
-    # 像素替换：在最终结果图上，凡是 mask 是白色的位置，都把correct_image的像素填进去
+    # 用NumPy高精度图层实现像素替换：在最终结果图上，凡是 mask 是白色的位置，都把correct_image的像素填进去
     final_image = cv2.cvtColor(image_np_gray, cv2.COLOR_GRAY2BGR)
     final_image[mask > 0] = color_image_np[mask > 0]
 cv2.imshow('final_image', final_image)
