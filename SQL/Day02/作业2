@@ -1,0 +1,22 @@
+1.查询公司工资等级在3以上（包含3），的雇员编号和姓名
+SELECT empno, ename
+FROM emp e,salgrade s 
+WHERE sal BETWEEN losal AND hisal AND grade>=3; 
+2.查询公司所有雇员的姓名，雇员编号，部门名称，要求部门名称小写且显示所有部门
+SELECT ename,empno,LOWER(dname)
+FROM dept d LEFT JOIN emp e ON e.deptno= d.deptno;
+3.要求算出部门30的所有人员的姓名、雇佣年份（要求四舍五入到一位小数）、部门位置。
+SELECT ename,ROUND(DATE('now')-hiredate,1),loc
+FROM emp e NATURAL join dept d 
+WHERE deptno = '30';
+4.查询所有在12月雇佣的雇员姓名、雇员编号、年薪（12*（薪金+佣金））、薪资等级
+SELECT ename,empno,sal*12+IFNULL(COMM,0)*12 AS 年薪,grade
+FROM emp e JOIN salgrade s ON sal BETWEEN losal AND hisal
+WHERE STRFTIME('%m',hiredate)='12';
+5.查询出所有雇员和其领导的姓名和年薪。
+SELECT e.ename,m.ename,e.sal*12+IFNULL(e.comm,0)*12 AS 年薪
+FROM emp e join emp m ON e.mgr=m.empno;
+6.要求显示员工的姓名，编号和部门名称（要求部门名称简写为首字母，员工姓名为小写）
+SELECT LOWER(ename),empno,SUBSTR(dname,1,1)
+FROM emp NATIONAL JOIN dept;
+ 
