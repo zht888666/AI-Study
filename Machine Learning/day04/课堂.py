@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 
+
 if __name__ == '__main__':
     image_np = cv2.imread('作业1/caihong.jpg')
     print(image_np.shape)
@@ -10,6 +11,7 @@ if __name__ == '__main__':
 
     blue_low = np.array([0, 43, 46])
     blue_high = np.array([10, 255, 255])
+
 
     mask1 = cv2.inRange(image_np_hsv, blue_low, blue_high)
     blue_low = np.array([156, 43, 46])

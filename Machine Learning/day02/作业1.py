@@ -33,6 +33,7 @@ def A(num):
     plt.axis('off')
     plt.title('blue_channel')
 
+
     plt.subplot(133)
     plt.imshow(red)
     plt.axis('off')

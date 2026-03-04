@@ -185,7 +185,7 @@ def ai_dictionary_app():
 
 
         elif choice == '6':
-            print("\n感谢使用智能电子词典！")
+            print("\n感谢使用 AI 电子词典！")
             break
 
         else:
