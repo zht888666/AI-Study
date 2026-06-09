@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{TITLE}}</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #d9dee7;
+      --accent: #0f766e;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      line-height: 1.6;
+    }
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      padding: 28px 32px;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 28px 20px 48px;
+    }
+    h1, h2, h3 {
+      line-height: 1.25;
+      margin: 0 0 14px;
+    }
+    h1 {
+      font-size: 28px;
+    }
+    h2 {
+      margin-top: 26px;
+      font-size: 21px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 8px;
+    }
+    h3 {
+      margin-top: 20px;
+      font-size: 17px;
+    }
+    p, li {
+      color: var(--text);
+      font-size: 15px;
+    }
+    .muted {
+      color: var(--muted);
+      margin: 6px 0 0;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px;
+      margin-bottom: 20px;
+    }
+    pre {
+      overflow: auto;
+      background: #111827;
+      color: #e5e7eb;
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    a {
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>{{TITLE}}</h1>
+    <p class="muted">Internship project overview generated from audit.json and overview.md.</p>
+  </header>
+  <main>
+    <section class="panel">
+      {{OVERVIEW_HTML}}
+    </section>
+    <section class="panel">
+      <h2>audit.json</h2>
+      <pre>{{AUDIT_JSON}}</pre>
+    </section>
+  </main>
+</body>
+</html>

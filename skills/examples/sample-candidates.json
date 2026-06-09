@@ -1,0 +1,31 @@
+{
+  "queries": [
+    "fastapi internship project"
+  ],
+  "sources": [
+    "github"
+  ],
+  "generated_at": "2026-06-09T00:00:00Z",
+  "candidates": [
+    {
+      "source": "github",
+      "name": "example/example-api",
+      "url": "https://github.com/example/example-api",
+      "description": "Example API project for candidate JSON validation.",
+      "language": "Python",
+      "stars": 100,
+      "forks": 10,
+      "open_issues": 2,
+      "updated_at": "2026-06-01T00:00:00Z",
+      "pushed_at": "2026-06-01T00:00:00Z",
+      "license": "MIT",
+      "topics": [
+        "api",
+        "fastapi"
+      ],
+      "clone_url": "https://github.com/example/example-api.git",
+      "raw": {}
+    }
+  ],
+  "source_errors": []
+}

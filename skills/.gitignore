@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+project-prep/
+project-candidates.json
+gitee-candidates.json
+overview.html
+*.log
+.DS_Store
