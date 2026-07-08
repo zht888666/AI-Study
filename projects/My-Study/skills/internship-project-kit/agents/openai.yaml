@@ -1,0 +1,7 @@
+interface:
+  display_name: "JD 实习项目准备工具包"
+  short_description: "把 JD 转成实习项目选题、审计、运行和面试材料"
+  default_prompt: "使用 $internship-project-kit，根据我的 JD 和基础情况生成实习项目准备材料。"
+
+policy:
+  allow_implicit_invocation: true
