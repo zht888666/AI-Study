@@ -1,0 +1,26 @@
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Runtime data and logs
+*.log
+*.log.*
+workspace/sessions/
+workspace/memory/*
+!workspace/memory/.gitkeep
+
+# Local editor and assistant state
+.idea/
+.vscode/
+.claude/
+.codex/
+.codegraph/
+.reasonix/
+
+# Local secrets (use placeholder values in committed config.json)
+.env
+.env.*
+*.pem
+*.key
