@@ -271,7 +271,12 @@ async def async_main() -> None:
         print("[启动] Web 渠道已禁用")
 
     # 启动网关
-    gateway = Gateway(bus, channels, create_agent)
+    gateway = Gateway(
+        bus,
+        channels,
+        create_agent,
+        max_concurrent_agents=config.max_concurrent_agents,
+    )
 
     # 预创建 CLI Agent，让初始化信息在启动时就显示
     cli_session_key = "cli:local"

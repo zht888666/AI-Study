@@ -1,218 +1,147 @@
-"""
-Gateway 网关模块
-
-Gateway 是多渠道接入的核心网关，负责：
-- 管理多个渠道适配器（Channel）
-- 处理入站消息：从 MessageBus 消费 → 分发给对应的 Agent
-- 分发出站消息：从 MessageBus 消费 → 发送给对应的渠道
-- 缓存 Agent 实例（按 session_key）
-
-使用示例：
-    bus = MessageBus()
-    cli_channel = CLIChannel(bus)
-
-    def create_agent(session_key: str) -> AgentLoop:
-        # 根据 session_key 创建 Agent
-        ...
-
-    gateway = Gateway(
-        bus=bus,
-        channels=[cli_channel],
-        agent_factory=create_agent
-    )
-
-    # 启动网关
-    asyncio.run(gateway.run())
-"""
+"""Gateway 网关模块。"""
 
 import asyncio
 from typing import Callable
 
-from bus.queue import MessageBus, InboundMessage, OutboundMessage
-from channels.base import Channel
 from agent.loop import AgentLoop
+from bus.queue import InboundMessage, MessageBus, OutboundMessage
+from channels.base import Channel
 
 
 class Gateway:
-    """
-    网关核心类
-
-    管理多渠道接入和消息路由。
-    """
+    """管理渠道、消息路由和按会话隔离的 Agent 实例。"""
 
     def __init__(
         self,
         bus: MessageBus,
         channels: list[Channel],
         agent_factory: Callable[[str], AgentLoop],
+        max_concurrent_agents: int = 5,
     ) -> None:
         """
         Args:
-            bus: 消息总线实例
-            channels: 渠道适配器列表
-            agent_factory: Agent 创建函数，输入 session_key，返回 AgentLoop 实例
+            bus: 消息总线实例。
+            channels: 渠道适配器列表。
+            agent_factory: 根据 session_key 创建 AgentLoop 的工厂函数。
+            max_concurrent_agents: 同时执行 agent.run() 的最大会话数。
         """
+        if max_concurrent_agents < 1:
+            raise ValueError("max_concurrent_agents must be at least 1")
+
         self.bus = bus
         self.channels = channels
         self.agent_factory = agent_factory
 
-        # 内部状态
-        self._agents: dict[str, AgentLoop] = {}  # 按 session_key 缓存 Agent
-        self._channel_map: dict[str, Channel] = {}  # 按渠道名索引渠道
-
-        # 构建渠道映射表
-        for channel in channels:
-            self._channel_map[channel.name] = channel
+        self._agents: dict[str, AgentLoop] = {}
+        self._channel_map: dict[str, Channel] = {
+            channel.name: channel for channel in channels
+        }
+        self._session_locks: dict[str, asyncio.Lock] = {}
+        self._agent_semaphore = asyncio.Semaphore(max_concurrent_agents)
+        self._inflight_tasks: set[asyncio.Task[None]] = set()
 
     async def run(self) -> None:
-        """
-        启动网关
+        """并发启动渠道、入站分发循环和出站分发循环。"""
+        tasks: list[asyncio.Task[None]] = [
+            asyncio.create_task(channel.start()) for channel in self.channels
+        ]
+        tasks.append(asyncio.create_task(self._process_inbound()))
+        tasks.append(asyncio.create_task(self._dispatch_outbound()))
 
-        用 asyncio.gather 并发启动：
-        - 所有渠道的 start()
-        - _process_inbound() 入站消费循环
-        - _dispatch_outbound() 出站分发循环
-        """
-        # 构建任务列表
-        tasks = []
-
-        # 添加所有渠道的启动任务
-        for channel in self.channels:
-            tasks.append(channel.start())
-
-        # 添加入站和出站处理循环
-        tasks.append(self._process_inbound())
-        tasks.append(self._dispatch_outbound())
-
-        # 并发启动所有任务
         try:
-            # 等待所有任务（通常会阻塞直到某个渠道退出）
             await asyncio.gather(*tasks)
         except asyncio.CancelledError:
             pass
         finally:
-            # 取消所有未完成的任务
             for task in tasks:
                 if not task.done():
                     task.cancel()
-            # 等待任务取消完成（忽略 CancelledError）
             await asyncio.gather(*tasks, return_exceptions=True)
-            # 关闭所有渠道
             await self.shutdown()
 
     async def _process_inbound(self) -> None:
-        """
-        处理入站消息循环
-
-        while True 循环：
-        - 从 bus.consume_inbound() 取消息
-        - 构造 session_key = f"{msg.channel}:{msg.sender_id}"
-        - 从 _agents 缓存获取 Agent，不存在则调用 agent_factory 创建
-        - 调用 agent.run(msg.content)
-        - 构造 OutboundMessage 发布到 bus.publish_outbound()
-        - 用 try-except 包裹，Agent 出错时发送友好错误消息
-        """
+        """持续取入站消息，并将每条消息分发为独立处理任务。"""
         while True:
             try:
-                # 从消息总线消费入站消息
                 inbound_msg = await self.bus.consume_inbound()
+                task = asyncio.create_task(self._handle_inbound(inbound_msg))
+                self._inflight_tasks.add(task)
+                task.add_done_callback(self._inflight_tasks.discard)
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                print(f"警告: 入站处理循环异常 - {exc}")
 
-                # 构造 session_key
-                session_key = f"{inbound_msg.channel}:{inbound_msg.sender_id}"
+    async def _handle_inbound(self, inbound_msg: InboundMessage) -> None:
+        """处理一条消息；同会话串行，不同会话可在全局上限内并发。"""
+        session_key = f"{inbound_msg.channel}:{inbound_msg.sender_id}"
+        lock = self._session_locks.get(session_key)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._session_locks[session_key] = lock
 
-                # 从缓存获取 Agent，不存在则创建
-                if session_key not in self._agents:
+        async with lock:
+            try:
+                agent = self._agents.get(session_key)
+                if agent is None:
                     agent = self.agent_factory(session_key)
                     self._agents[session_key] = agent
-                else:
-                    agent = self._agents[session_key]
 
-                # 调用 Agent 处理消息
-                try:
+                # 先拿会话锁，再申请全局名额，避免同会话排队消息占用名额。
+                async with self._agent_semaphore:
                     response = await agent.run(inbound_msg.content)
 
-                    # 构造出站消息
-                    outbound_msg = OutboundMessage(
-                        channel=inbound_msg.channel,
-                        chat_id=inbound_msg.chat_id,
-                        content=response,
-                    )
-
-                    # 发布到出站队列
-                    await self.bus.publish_outbound(outbound_msg)
-
-                except Exception as e:
-                    # Agent 出错，发送友好错误消息
-                    error_msg = OutboundMessage(
-                        channel=inbound_msg.channel,
-                        chat_id=inbound_msg.chat_id,
-                        content=f"抱歉，处理消息时发生了错误。请稍后重试。",
-                    )
-                    await self.bus.publish_outbound(error_msg)
-
-                    # 打印错误日志（调试用）
-                    print(f"警告: Agent 处理出错 - {e}")
-
+                outbound_msg = OutboundMessage(
+                    channel=inbound_msg.channel,
+                    chat_id=inbound_msg.chat_id,
+                    content=response,
+                )
+                await self.bus.publish_outbound(outbound_msg)
             except asyncio.CancelledError:
-                # 任务被取消，退出循环
-                break
-
-            except Exception as e:
-                # 消费循环异常，打印日志并继续
-                print(f"警告: 入站处理循环异常 - {e}")
-                continue
+                raise
+            except Exception as exc:
+                error_msg = OutboundMessage(
+                    channel=inbound_msg.channel,
+                    chat_id=inbound_msg.chat_id,
+                    content="抱歉，处理消息时发生了错误。请稍后重试。",
+                )
+                await self.bus.publish_outbound(error_msg)
+                print(f"警告: Agent 处理出错 - {exc}")
 
     async def _dispatch_outbound(self) -> None:
-        """
-        分发出站消息循环
-
-        while True 循环：
-        - 从 bus.consume_outbound() 取回复
-        - 根据 msg.channel 找到对应的 Channel
-        - 调用 channel.send(msg)
-        """
+        """持续从出站队列取消息，并发送到对应渠道。"""
         while True:
             try:
-                # 从消息总线消费出站消息
                 outbound_msg = await self.bus.consume_outbound()
-
-                # 查找对应的渠道
                 channel = self._channel_map.get(outbound_msg.channel)
 
                 if channel is None:
                     print(f"警告: 渠道 '{outbound_msg.channel}' 不存在，无法发送消息")
                     continue
 
-                # 调用渠道发送消息
                 try:
                     await channel.send(outbound_msg)
-
-                except Exception as e:
-                    # 渠道发送失败，打印日志
-                    print(f"警告: 渠道 '{outbound_msg.channel}' 发送失败 - {e}")
-
+                except Exception as exc:
+                    print(f"警告: 渠道 '{outbound_msg.channel}' 发送失败 - {exc}")
             except asyncio.CancelledError:
-                # 任务被取消，退出循环
                 break
-
-            except Exception as e:
-                # 分发循环异常，打印日志并继续
-                print(f"警告: 出站分发循环异常 - {e}")
-                continue
+            except Exception as exc:
+                print(f"警告: 出站分发循环异常 - {exc}")
 
     async def shutdown(self) -> None:
-        """
-        关闭网关
-
-        - 遍历 channels 调用 stop()
-        - 清空 _agents 缓存
-        """
-        # 停止所有渠道
+        """停止渠道并取消仍在运行或等待的入站处理任务。"""
         for channel in self.channels:
             try:
                 await channel.stop()
-            except Exception as e:
-                print(f"警告: 渠道 '{channel.name}' 关闭失败 - {e}")
+            except Exception as exc:
+                print(f"警告: 渠道 '{channel.name}' 关闭失败 - {exc}")
 
-        # 清空 Agent 缓存
+        pending_tasks = list(self._inflight_tasks)
+        for task in pending_tasks:
+            task.cancel()
+        if pending_tasks:
+            await asyncio.gather(*pending_tasks, return_exceptions=True)
+
+        self._inflight_tasks.clear()
+        self._session_locks.clear()
         self._agents.clear()

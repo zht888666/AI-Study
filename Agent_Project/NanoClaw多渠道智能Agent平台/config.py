@@ -27,6 +27,7 @@ class NanoClawConfig:
         model: 使用的模型名称，默认 Kimi-K2.5
         workspace: 工作区路径，默认当前目录
         max_iterations: Agent 最大迭代次数，防止无限循环
+        max_concurrent_agents: 同时执行 Agent 的最大会话数
         identity_file: 人设文件名，相对于 workspace
     """
 
@@ -36,6 +37,7 @@ class NanoClawConfig:
     models: dict = None  # {"main": "...", "subagent": "...", "cheap": "..."}
     workspace: str = "."
     max_iterations: int = 32
+    max_concurrent_agents: int = 5
     identity_file: str = "identity.md"
     # 飞书配置
     feishu_app_id: str = ""
@@ -88,6 +90,8 @@ def load_config(config_path: str = "config.json") -> NanoClawConfig:
                 config.workspace = data["workspace"]
             if "max_iterations" in data:
                 config.max_iterations = data["max_iterations"]
+            if "max_concurrent_agents" in data:
+                config.max_concurrent_agents = data["max_concurrent_agents"]
             if "identity_file" in data:
                 config.identity_file = data["identity_file"]
             # 加载多模型配置

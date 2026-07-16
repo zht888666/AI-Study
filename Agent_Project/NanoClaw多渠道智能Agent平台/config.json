@@ -8,6 +8,7 @@
     },
     "workspace": ".",
     "max_iterations": 32,
+    "max_concurrent_agents": 5,
     "identity_file": "identity.md",
     "feishu": {
         "app_id": "{你的密匙}",
